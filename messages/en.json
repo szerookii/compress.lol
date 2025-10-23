@@ -28,8 +28,8 @@
 	"no": "No",
 	"download_compressed": "Download Compressed Video",
 	"upload_compress_message": "Upload and compress a video to see results here",
-        "target_size_warning": "The compressed video is larger than the target size. Try selecting a smaller target or consider a shorter video.",
-        "small_video_warning": "The original file is already smaller than the selected target. Compression may increase its size. Choose a smaller target or keep the original file.",
+	"target_size_warning": "The compressed video is larger than the target size. Try selecting a smaller target or consider a shorter video.",
+	"small_video_warning": "The original file is already smaller than the selected target. Compression may increase its size. Choose a smaller target or keep the original file.",
 	"how_it_works": "How it works",
 	"how_target_size": "Choose your target size - We'll compress your video to fit perfectly!",
 	"how_motion_detection": "Smart motion detection - Moving scenes get extra quality, static ones compress more.",
@@ -47,5 +47,7 @@
 	"audio_only_mode_description": "Process audio only - keep original video without compression and just remove or modify sound",
 	"process_audio_only": "Process Audio Only",
 	"processing_audio": "Processing audio...",
-	"audio_processing_results": "Audio processing results"
+	"audio_processing_results": "Audio processing results",
+	"preserve_original_fps": "Preserve Original FPS",
+	"preserve_original_fps_description": "Keep the video's original framerate instead of reducing it for smaller file sizes"
 }

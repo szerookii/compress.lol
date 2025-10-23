@@ -28,8 +28,8 @@
 	"no": "Nie",
 	"download_compressed": "Pobierz skompresowane wideo",
 	"upload_compress_message": "Wrzuć i skompresuj jakiś film, a wyniki pojawią się tutaj",
-        "target_size_warning": "Skompresowany film jest większy niż rozmiar docelowy. Wybierz inny cel albo krótsze wideo.",
-        "small_video_warning": "Oryginalny plik jest już mniejszy niż wybrany limit. Kompresja może zwiększyć jego rozmiar. Wybierz mniejszy limit albo pozostaw plik bez zmian.",
+	"target_size_warning": "Skompresowany film jest większy niż rozmiar docelowy. Wybierz inny cel albo krótsze wideo.",
+	"small_video_warning": "Oryginalny plik jest już mniejszy niż wybrany limit. Kompresja może zwiększyć jego rozmiar. Wybierz mniejszy limit albo pozostaw plik bez zmian.",
 	"how_it_works": "Jak to działa?",
 	"how_target_size": "Wybierz docelowy rozmiar - skompresujemy Twój plik, aby osiągnął dokładnie ten rozmiar!",
 	"how_motion_detection": "Inteligentne wykrywanie ruchu - sceny ruchome będą miały zachowaną jakość, a sceny statyczne będą mocniej skompresowane.",
@@ -47,5 +47,7 @@
 	"audio_only_mode_description": "Przetwarzaj tylko dźwięk - zachowaj oryginalne wideo bez kompresji i tylko usuń lub zmodyfikuj dźwięk",
 	"process_audio_only": "Przetwarzaj tylko dźwięk",
 	"processing_audio": "Przetwarzanie dźwięku...",
-	"audio_processing_results": "Wyniki przetwarzania dźwięku"
+	"audio_processing_results": "Wyniki przetwarzania dźwięku",
+	"preserve_original_fps": "Zachowaj oryginalny FPS",
+	"preserve_original_fps_description": "Zachowaj oryginalną liczbę klatek na sekundę wideo zamiast zmniejszać ją w celu uzyskania mniejszych plików"
 }

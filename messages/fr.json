@@ -28,8 +28,8 @@
 	"no": "Non",
 	"download_compressed": "Télécharger la vidéo compressée",
 	"upload_compress_message": "Téléversez et compressez une vidéo pour voir les résultats ici",
-        "target_size_warning": "La vidéo compressée est plus grande que la taille cible. Essayez de sélectionner une cible plus petite ou une vidéo plus courte.",
-        "small_video_warning": "Le fichier original est déjà plus petit que la taille cible sélectionnée. La recompression peut augmenter sa taille. Choisissez une cible plus petite ou conservez le fichier tel quel.",
+	"target_size_warning": "La vidéo compressée est plus grande que la taille cible. Essayez de sélectionner une cible plus petite ou une vidéo plus courte.",
+	"small_video_warning": "Le fichier original est déjà plus petit que la taille cible sélectionnée. La recompression peut augmenter sa taille. Choisissez une cible plus petite ou conservez le fichier tel quel.",
 	"how_it_works": "Comment ça marche",
 	"how_target_size": "Choisissez votre taille cible - Nous compresserons parfaitement votre vidéo !",
 	"how_motion_detection": "Détection intelligente du mouvement - Les scènes en mouvement gardent plus de qualité.",
@@ -47,5 +47,7 @@
 	"audio_only_mode_description": "Ne traiter que l'audio - garder la vidéo originale sans compression et juste supprimer ou modifier le son",
 	"process_audio_only": "Traiter l'audio seulement",
 	"processing_audio": "Traitement audio en cours...",
-	"audio_processing_results": "Résultats du traitement audio"
+	"audio_processing_results": "Résultats du traitement audio",
+	"preserve_original_fps": "Conserver le FPS d'origine",
+	"preserve_original_fps_description": "Conserver la fréquence d'images d'origine de la vidéo au lieu de la réduire pour obtenir des fichiers plus petits"
 }

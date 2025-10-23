@@ -47,5 +47,7 @@
 	"audio_only_mode_description": "معالجة الصوت فقط - احتفظ بالفيديو الأصلي بدون ضغط وقم فقط بإزالة الصوت أو تعديله",
 	"process_audio_only": "معالجة الصوت فقط",
 	"processing_audio": "جار معالجة الصوت...",
-	"audio_processing_results": "نتائج معالجة الصوت"
+	"audio_processing_results": "نتائج معالجة الصوت",
+	"preserve_original_fps": "الحفاظ على معدل الإطارات الأصلي",
+	"preserve_original_fps_description": "احتفظ بمعدل إطارات الفيديو الأصلي بدلاً من تقليله لتقليل حجم الملف"
 }

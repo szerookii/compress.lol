@@ -16,9 +16,8 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import LanguageSelector from '$lib/components/ui/selector/language-selector.svelte';
 	import ThemeSelector from '$lib/components/ui/selector/theme-selector.svelte';
-		import Settings from '@lucide/svelte/icons/settings';
+	import Settings from '@lucide/svelte/icons/settings';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 
 	interface CompressionTarget {
 		label: string;
@@ -66,6 +65,7 @@
 	let showAdvancedSettings = $state(false);
 	let muteSound = $state(false);
 	let audioOnlyMode = $state(false);
+	let preserveOriginalFps = $state(false);
 
 	const getOptimalThreadCount = (): number => {
 		try {
@@ -173,6 +173,60 @@
 		}
 	};
 
+	const detectVideoFps = async (file: File): Promise<number> => {
+		if (!ffmpeg || !isLoaded) {
+			console.warn('FFmpeg not loaded, falling back to default FPS');
+			return 30;
+		}
+
+		const inputName = `fps_detect_${Date.now()}.mp4`;
+
+		try {
+			await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+			let detectedFps = 30;
+			let foundFps = false;
+
+			const logHandler = ({ message: msg }: LogEvent) => {
+				if (!foundFps) {
+					// Look for "X fps" or "X tbr" in stream info line
+					// Example: "1920x1080, 13174 kb/s, 59.96 fps, 59.94 tbr, 600 tbn"
+					const fpsMatch = msg.match(/,\s*(\d+\.?\d*)\s*fps/i);
+					const tbrMatch = msg.match(/(\d+\.?\d*)\s*tbr/i);
+
+					if (fpsMatch) {
+						detectedFps = Math.round(parseFloat(fpsMatch[1]));
+						foundFps = true;
+					} else if (tbrMatch && !foundFps) {
+						detectedFps = Math.round(parseFloat(tbrMatch[1]));
+						foundFps = true;
+					}
+				}
+			};
+
+			ffmpeg.on('log', logHandler);
+
+			try {
+				// Extract only 1 frame to minimize processing time
+				await ffmpeg.exec(['-i', inputName, '-frames:v', '1', '-f', 'null', '-']);
+			} catch (e) {
+				// Command may fail but we get the metadata we need
+			}
+
+			ffmpeg.off('log', logHandler);
+			await ffmpeg.deleteFile(inputName);
+
+			return detectedFps;
+		} catch (error) {
+			console.error('FPS detection failed:', error);
+			// Clean up on error
+			try {
+				await ffmpeg.deleteFile(inputName);
+			} catch {}
+			return 30; // Fallback
+		}
+	};
+
 	const getVideoMetadata = async (file: File): Promise<void> => {
 		try {
 			const video = document.createElement('video');
@@ -192,24 +246,35 @@
 					const bitratePerPixel = (estimatedBitrate / pixelCount) * 1000;
 					const hasMotion = bitratePerPixel > 0.1 || estimatedBitrate > 3000;
 
-					let detectedFps = 30;
-					if (fileName.includes('60fps') || fileName.includes('60p')) detectedFps = 60;
-					else if (fileName.includes('24fps') || fileName.includes('24p')) detectedFps = 24;
-					else if (fileName.includes('25fps') || fileName.includes('25p')) detectedFps = 25;
-
+					// Set initial metadata with default FPS (will be detected in background)
 					videoMetadata = {
 						duration: video.duration,
 						bitrate: estimatedBitrate,
 						resolution: `${video.videoWidth}x${video.videoHeight}`,
 						codec: detectedCodec,
 						size: file.size,
-						fps: detectedFps,
+						fps: 30, // Default, will be updated by background FPS detection
 						hasMotion
 					};
 					URL.revokeObjectURL(video.src);
 					resolve();
 				};
 			});
+
+			// Detect FPS in background after basic metadata is loaded
+			detectVideoFps(file)
+				.then((fps) => {
+					if (videoMetadata) {
+						videoMetadata = { ...videoMetadata, fps };
+						console.log(`✓ Video FPS detected: ${fps} fps`);
+					}
+				})
+				.catch((error) => {
+					console.error('FPS detection failed, using fallback:', error);
+					if (videoMetadata) {
+						videoMetadata = { ...videoMetadata, fps: 30 };
+					}
+				});
 		} catch (error) {
 			console.error('Failed to get video metadata:', error);
 		}
@@ -236,7 +301,8 @@
 
 	const calculateCompressionSettings = (
 		targetSize: number,
-		metadata: VideoMetadata
+		metadata: VideoMetadata,
+		preserveOriginalFps: boolean
 	): CompressionSettings => {
 		const efficiency = metadata.hasMotion ? 0.8 : 0.85;
 		const targetBitrate = Math.round(((targetSize * 8) / metadata.duration / 1000) * efficiency);
@@ -250,6 +316,7 @@
 		let refs = 1;
 		let bframes = 0;
 		let targetFps = metadata.fps;
+		let fpsCap = metadata.fps;
 
 		const [width, height] = metadata.resolution.split('x').map(Number);
 
@@ -259,23 +326,27 @@
 				resolution = calculateOptimalResolution(width, height, maxWidth);
 			}
 			crf = metadata.hasMotion ? 18 : 26;
-			if (targetFps > 24) targetFps = 24;
+			fpsCap = 24;
 		} else if (targetSize <= 25 * 1024 * 1024) {
 			const maxWidth = metadata.hasMotion ? 1440 : 1280;
 			if (width > maxWidth) {
 				resolution = calculateOptimalResolution(width, height, maxWidth);
 			}
 			crf = metadata.hasMotion ? 16 : 24;
-			if (targetFps > 30) targetFps = 30;
+			fpsCap = 30;
 		} else if (targetSize <= 50 * 1024 * 1024) {
 			if (width > 1920) {
 				resolution = calculateOptimalResolution(width, height, 1920);
 			}
 			crf = metadata.hasMotion ? 14 : 22;
-			if (targetFps > 30) targetFps = 30;
+			fpsCap = 30;
 		} else {
 			crf = metadata.hasMotion ? 12 : 20;
-			if (targetFps > 30) targetFps = 30;
+			fpsCap = 30;
+		}
+
+		if (!preserveOriginalFps) {
+			targetFps = Math.min(targetFps, fpsCap);
 		}
 
 		const bufferSize = metadata.hasMotion ? `${videoBitrate * 3}k` : `${videoBitrate * 2}k`;
@@ -313,7 +384,7 @@
 			// If audio-only mode, use the dedicated logic
 			if (audioOnlyMode) {
 				message = 'Processing audio only...';
-				
+
 				const args = [
 					'-i',
 					`${inputDir}/${selectedFile.name}`,
@@ -329,14 +400,7 @@
 					args.push('-c:a', 'copy');
 				}
 
-				args.push(
-					'-movflags',
-					'+faststart',
-					'-f',
-					'mp4',
-					'-y',
-					'output.mp4'
-				);
+				args.push('-movflags', '+faststart', '-f', 'mp4', '-y', 'output.mp4');
 
 				console.log('FFmpeg audio-only args:', args);
 
@@ -355,7 +419,11 @@
 				return;
 			}
 
-			const settings = calculateCompressionSettings(selectedTarget.value, videoMetadata);
+			const settings = calculateCompressionSettings(
+				selectedTarget.value,
+				videoMetadata,
+				preserveOriginalFps
+			);
 			const threadCount = isChromium ? getOptimalThreadCount() : 0;
 
 			message = 'Starting compression...';
@@ -389,28 +457,13 @@
 
 			// Add audio settings only if not muting sound
 			if (!muteSound) {
-				args.push(
-					'-c:a',
-					'aac',
-					'-b:a',
-					settings.audioBitrate,
-					'-ac',
-					'2',
-					'-ar',
-					'48000'
-				);
+				args.push('-c:a', 'aac', '-b:a', settings.audioBitrate, '-ac', '2', '-ar', '48000');
 			} else {
 				// Remove audio completely
 				args.push('-an');
 			}
 
-			args.push(
-				'-movflags',
-				'+faststart',
-				'-f',
-				'mp4',
-				'-y'
-			);
+			args.push('-movflags', '+faststart', '-f', 'mp4', '-y');
 
 			let videoFilters: string[] = [];
 
@@ -456,7 +509,6 @@
 		}
 	};
 
-	
 	const downloadVideo = (): void => {
 		if (!processedVideo) return;
 
@@ -467,7 +519,7 @@
 		const blob = new Blob([new Uint8Array(processedVideo as Uint8Array)], { type: 'video/mp4' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
-		
+
 		let filename = '';
 		if (audioOnlyMode) {
 			const audioStatus = muteSound ? 'no_audio' : 'with_audio';
@@ -475,9 +527,9 @@
 		} else {
 			filename = `compressed_${selectedTarget?.label?.replace(' ', '') || 'unknown'}_${selectedFile?.name || 'video.mp4'}`;
 		}
-		
+
 		console.log('Generated filename:', filename);
-		
+
 		a.download = filename;
 		a.href = url;
 		document.body.appendChild(a);
@@ -507,13 +559,13 @@
 		return `${mins}m ${secs}s`;
 	};
 
-        const compressionRatio = $derived(
-                compressedSize > 0 && originalSize > 0 ? (1 - compressedSize / originalSize) * 100 : 0
-        );
+	const compressionRatio = $derived(
+		compressedSize > 0 && originalSize > 0 ? (1 - compressedSize / originalSize) * 100 : 0
+	);
 
-        const isFileSmallerThanTarget = $derived(
-                !!selectedTarget && originalSize > 0 && originalSize < selectedTarget.value
-        );
+	const isFileSmallerThanTarget = $derived(
+		!!selectedTarget && originalSize > 0 && originalSize < selectedTarget.value
+	);
 
 	const handleTargetChange = (value: string | undefined): void => {
 		if (!value) return;
@@ -593,7 +645,8 @@
 							<div>{m.duration()}: {formatDuration(videoMetadata.duration)}</div>
 							<div>{m.resolution()}: {videoMetadata.resolution}</div>
 							<div>{m.size()}: {formatFileSize(videoMetadata.size)}</div>
-							<div>
+							<div>FPS: {videoMetadata.fps}</div>
+							<div class="col-span-2">
 								{m.motion_level()}:
 								<Badge variant={videoMetadata.hasMotion ? 'destructive' : 'secondary'}>
 									{videoMetadata.hasMotion ? m.high_motion() : m.low_motion()}
@@ -618,58 +671,77 @@
 				</div>
 
 				<!-- Advanced Settings Section -->
-				<div class="border rounded-lg">
+				<div class="rounded-lg border">
 					<button
 						onclick={() => (showAdvancedSettings = !showAdvancedSettings)}
-						class="w-full flex items-center justify-between p-3 text-left hover:bg-accent/50 transition-colors rounded-t-lg"
+						class="flex w-full items-center justify-between rounded-t-lg p-3 text-left transition-colors hover:bg-accent/50"
 					>
 						<div class="flex items-center gap-2">
 							<Settings class="h-4 w-4" />
 							<span class="text-sm font-medium">{m.advanced_settings()}</span>
 						</div>
-						<ChevronDown 
-							class="h-4 w-4 transition-transform duration-200 {showAdvancedSettings ? 'rotate-180' : ''}" 
+						<ChevronDown
+							class="h-4 w-4 transition-transform duration-200 {showAdvancedSettings
+								? 'rotate-180'
+								: ''}"
 						/>
 					</button>
-					
-					<div 
+
+					<div
 						class="overflow-hidden transition-all duration-300 ease-in-out"
 						style="max-height: {showAdvancedSettings ? '350px' : '0px'};"
 					>
-						<div class="border-t p-3 space-y-4">
+						<div class="space-y-4 border-t p-3">
 							<div class="flex items-start space-x-3">
 								<input
 									type="checkbox"
 									id="audio-only-mode"
 									bind:checked={audioOnlyMode}
-									class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary mt-0.5"
+									class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
 								/>
 								<div class="grid gap-1">
 									<label
 										for="audio-only-mode"
-										class="text-sm font-medium leading-none cursor-pointer"
+										class="cursor-pointer text-sm leading-none font-medium"
 									>
 										{m.audio_only_mode()}
 									</label>
 									<p class="text-xs text-muted-foreground">{m.audio_only_mode_description()}</p>
 								</div>
 							</div>
-							
+
 							<div class="flex items-start space-x-3">
 								<input
 									type="checkbox"
 									id="mute-sound"
 									bind:checked={muteSound}
-									class="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary mt-0.5"
+									class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
 								/>
 								<div class="grid gap-1">
-									<label
-										for="mute-sound"
-										class="text-sm font-medium leading-none cursor-pointer"
-									>
+									<label for="mute-sound" class="cursor-pointer text-sm leading-none font-medium">
 										{m.mute_sound()}
 									</label>
 									<p class="text-xs text-muted-foreground">{m.mute_sound_description()}</p>
+								</div>
+							</div>
+
+							<div class="flex items-start space-x-3">
+								<input
+									type="checkbox"
+									id="preserve-original-fps"
+									bind:checked={preserveOriginalFps}
+									class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+								/>
+								<div class="grid gap-1">
+									<label
+										for="preserve-original-fps"
+										class="cursor-pointer text-sm leading-none font-medium"
+									>
+										{m.preserve_original_fps()}
+									</label>
+									<p class="text-xs text-muted-foreground">
+										{m.preserve_original_fps_description()}
+									</p>
 								</div>
 							</div>
 						</div>
@@ -677,13 +749,15 @@
 				</div>
 
 				{#if isFileSmallerThanTarget}
-                                        <Alert.Root class="border-yellow-500/70 bg-yellow-500/10 text-yellow-900 dark:text-yellow-100">
-                                                <Alert.Description>{m.small_video_warning()}</Alert.Description>
-                                        </Alert.Root>
-                                {/if}
+					<Alert.Root
+						class="border-yellow-500/70 bg-yellow-500/10 text-yellow-900 dark:text-yellow-100"
+					>
+						<Alert.Description>{m.small_video_warning()}</Alert.Description>
+					</Alert.Root>
+				{/if}
 
-                                {#if isChromium}
-                                        <Alert.Root class="mt-2">
+				{#if isChromium}
+					<Alert.Root class="mt-2">
 						<Alert.Description>
 							{m.chromium_warning()}
 						</Alert.Description>
@@ -695,10 +769,11 @@
 					disabled={!selectedFile || !isLoaded || isProcessing}
 					class="w-full"
 				>
-					{isProcessing 
-						? (audioOnlyMode ? m.processing_audio() : m.compressing())
-						: (audioOnlyMode ? m.process_audio_only() : m.compress_video())
-					}
+					{#if isProcessing}
+						{audioOnlyMode ? m.processing_audio() : m.compressing()}
+					{:else}
+						{audioOnlyMode ? m.process_audio_only() : m.compress_video()}
+					{/if}
 				</Button>
 
 				{#if isProcessing && progress > 0}
