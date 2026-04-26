@@ -100,6 +100,13 @@
 	let selectedTarget = $state(compressionTargets[1]);
 
 	onMount(async (): Promise<void> => {
+		try {
+			const savedTarget = localStorage.getItem('targetSize');
+			if (savedTarget) {
+				handleTargetChange(savedTarget);
+			}
+		} catch (e) {
+		}
 		await loadFFmpeg();
 		isChromium = isChromiumByFeatures();
 	});
@@ -573,6 +580,10 @@
 		const target = compressionTargets.find((t) => t.label === value);
 		if (target) {
 			selectedTarget = target;
+			try {
+				localStorage.setItem('targetSize', value);
+			} catch (e) {
+			}
 		}
 	};
 </script>
