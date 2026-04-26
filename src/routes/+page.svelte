@@ -66,6 +66,9 @@
 	let muteSound = $state(false);
 	let audioOnlyMode = $state(false);
 	let preserveOriginalFps = $state(false);
+	let trimVideo = $state(false);
+	let skipFirstSeconds = $state(0);
+	let skipLastSeconds = $state(0);
 
 	const getOptimalThreadCount = (): number => {
 		try {
@@ -385,12 +388,21 @@
 			if (audioOnlyMode) {
 				message = 'Processing audio only...';
 
-				const args = [
-					'-i',
-					`${inputDir}/${selectedFile.name}`,
-					'-c:v',
-					'copy' // Copy video stream without re-encoding
-				];
+				const args: string[] = [];
+				if (trimVideo && skipFirstSeconds > 0) {
+					args.push('-ss', skipFirstSeconds.toString());
+				}
+				
+				args.push('-i', `${inputDir}/${selectedFile.name}`);
+
+				if (trimVideo && (skipFirstSeconds > 0 || skipLastSeconds > 0)) {
+					const targetDuration = videoMetadata.duration - skipFirstSeconds - skipLastSeconds;
+					if (targetDuration > 0) {
+						args.push('-t', targetDuration.toString());
+					}
+				}
+
+				args.push('-c:v', 'copy'); // Copy video stream without re-encoding
 
 				// Handle audio based on muteSound setting
 				if (muteSound) {
@@ -428,9 +440,25 @@
 
 			message = 'Starting compression...';
 
-			const args = [
+			const args: string[] = [];
+			
+			if (trimVideo && skipFirstSeconds > 0) {
+				args.push('-ss', skipFirstSeconds.toString());
+			}
+
+			args.push(
 				'-i',
-				`${inputDir}/${selectedFile.name}`,
+				`${inputDir}/${selectedFile.name}`
+			);
+
+			if (trimVideo && (skipFirstSeconds > 0 || skipLastSeconds > 0)) {
+				const targetDuration = videoMetadata.duration - skipFirstSeconds - skipLastSeconds;
+				if (targetDuration > 0) {
+					args.push('-t', targetDuration.toString());
+				}
+			}
+
+			args.push(
 				'-c:v',
 				'libx264',
 				'-preset',
@@ -453,7 +481,7 @@
 				'hex',
 				'-subq',
 				'3'
-			];
+			);
 
 			// Add audio settings only if not muting sound
 			if (!muteSound) {
@@ -743,6 +771,52 @@
 										{m.preserve_original_fps_description()}
 									</p>
 								</div>
+							</div>
+							<div class="flex flex-col space-y-3">
+								<div class="flex items-start space-x-3">
+									<input
+										type="checkbox"
+										id="trim-video"
+										bind:checked={trimVideo}
+										class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+									/>
+									<div class="grid gap-1">
+										<label
+											for="trim-video"
+											class="cursor-pointer text-sm leading-none font-medium"
+										>
+											{m.trim_video()}
+										</label>
+										<p class="text-xs text-muted-foreground">
+											{m.trim_video_description()}
+										</p>
+									</div>
+								</div>
+								
+								{#if trimVideo}
+									<div class="grid grid-cols-2 gap-4 pl-7">
+										<div class="space-y-1.5">
+											<Label for="skip-first" class="text-xs">{m.skip_first_seconds()}</Label>
+											<Input 
+												id="skip-first" 
+												type="number" 
+												min="0" 
+												bind:value={skipFirstSeconds} 
+												class="h-8 text-sm" 
+											/>
+										</div>
+										<div class="space-y-1.5">
+											<Label for="skip-last" class="text-xs">{m.skip_last_seconds()}</Label>
+											<Input 
+												id="skip-last" 
+												type="number" 
+												min="0" 
+												bind:value={skipLastSeconds} 
+												class="h-8 text-sm" 
+											/>
+										</div>
+									</div>
+								{/if}
 							</div>
 						</div>
 					</div>

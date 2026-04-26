@@ -49,5 +49,9 @@
 	"processing_audio": "Processing audio...",
 	"audio_processing_results": "Audio processing results",
 	"preserve_original_fps": "Preserve Original FPS",
-	"preserve_original_fps_description": "Keep the video's original framerate instead of reducing it for smaller file sizes"
+	"preserve_original_fps_description": "Keep the video's original framerate instead of reducing it for smaller file sizes",
+	"trim_video": "Trim Video",
+	"trim_video_description": "Remove the specified number of seconds from the beginning and/or end of the video",
+	"skip_first_seconds": "Skip first (seconds)",
+	"skip_last_seconds": "Skip last (seconds)"
 }
